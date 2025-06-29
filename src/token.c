@@ -1,9 +1,9 @@
 #include "../include/token.h"
-#include "../include/helper.h"
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "../include/error.h"
+#include "../include/logger.h"
 #include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 const operator_t ops[] = {
@@ -21,14 +21,14 @@ void stack_push(token_stack_t *top, token_t *token) {
   *top = token;
 }
 
-token_t *stack_pop(token_stack_t *top) {
+err_t stack_pop(token_stack_t *top, token_t **pop) {
   if (*top == NULL) {
-    printf("\n>> reached end of stack");
-    return NULL;
+    LOG_WARN("\n>> Reached end of stack %s:%d", __func__, __LINE__);
+    return ERROR;
   }
-  token_t *pop = *top;
+  *pop = *top;
   *top = (*top)->next;
-  return pop;
+  return OK;
 }
 
 void init_token_queue(token_queue_t *q) {
@@ -45,74 +45,84 @@ void enqueue(token_queue_t *q, token_t *token) {
   q->tail = token;
 }
 
-token_t *dequeue(token_queue_t *q) {
+err_t dequeue(token_queue_t *q, token_t **deq) {
   if (q->head == NULL) {
-    LOG_INFO("\n>> Queue is empty. %s", __func__);
-    return NULL;
+    LOG_WARN("\n>> Queue is empty. %s:%d", __FILE__, __LINE__);
+    return ERROR;
   }
-  token_t *deq = q->head;
+  *deq = q->head;
   q->head = q->head->next;
-  return deq;
+  return OK;
 }
 
-bool is_unary(expression_t *ex, int *index) {
+err_t is_unary(expression_t *ex, int *index) {
   if (*index == 0) // first char
   {
-    return true;
+    return OK;
   } else if (!isdigit(*(*ex - 1)) && !isalpha(*(*ex - 1))) {
-    return true;
+    return OK;
   }
-  return false;
+  return ERROR; 
 }
 
-operator_t char_to_op(expression_t * ex, int *index) {
+err_t char_to_op(expression_t *ex, int *index, operator_t *op) {
   // for operators with multiple chars
   if (strncmp(*ex, ">>", 2) == 0) {
+    LOG_INFO("Found right shift operator");
     (*index) += 2;
     *ex = *ex + 2;
-    return ops[_r_shift];
+    *op = ops[_r_shift];
+    return OK;
   } else if (strncmp(*ex, "<<", 2) == 0) {
     (*index) += 2;
     *ex = *ex + 2;
-    return ops[_l_shift];
+    *op = ops[_l_shift];
+    return OK;
   }
 
   // for operators with single char
-  operator_t result = ops[_invalid_sign];
   switch (**ex) {
   case '+':
-    result = is_unary(ex, index) ? ops[_pos] : ops[_add];
+    if(is_unary(ex, index) == OK) {
+      *op = ops[_pos];
+    } else {
+      *op = ops[_add];
+    }
     break;
   case '-':
-    result = is_unary(ex, index) ? ops[_neg] : ops[_sub];
+    if (is_unary(ex, index) == OK) {
+      *op = ops[_neg];
+    } else {
+      *op = ops[_sub];
+    }
     break;
   case '*':
-    result = ops[_mult];
+    *op = ops[_mult];
     break;
   case '/':
-    result = ops[_div];
+    *op = ops[_div];
     break;
   case '&':
-    result = ops[_and];
+    *op = ops[_and];
     break;
   case '|':
-    result = ops[_or];
+    *op = ops[_or];
     break;
   default:
-    result = ops[_invalid_sign];
-    break;
+    *op = ops[_invalid_sign];
+    return INVALID_EXPRESSION; 
   }
   (*index)++;
   (*ex)++;
-  return result;
+  return OK;
 }
 
-token_t *tokanizer(expression_t *ex, int *index) {
+err_t tokanizer(expression_t *ex, int *index, token_t *new_token) {
   if (ex == NULL) {
-    printf("\n>> got null expression");
-    return NULL;
+    LOG_WARN("\n>> Got null expression %s:%d", __func__, __LINE__);
+    return INVALID_EXPRESSION;
   }
-  token_t *new_token = malloc(sizeof(token_t));
+
   if (isdigit(**ex)) {
     char *str_end;
 
@@ -121,25 +131,25 @@ token_t *tokanizer(expression_t *ex, int *index) {
       long int hex = strtol(*ex, &str_end, 16);
       if (isalpha(*str_end)) // found non-hex character
       {
-        return NULL;
+        return INVALID_EXPRESSION;
       }
       *index += (str_end - *ex); // update index
       *ex = str_end;
       new_token->type = OPERAND;
       new_token->val.hex_bin = hex;
       new_token->next = NULL;
-      return new_token;
+      return OK;
     } else if (strncmp(*ex, "0b", 2) == 0 || strncmp(*ex, "0B", 2) == 0) {
       long int bin = strtol(*ex + 2, &str_end, 2);
       if (isdigit(*str_end)) {
-        return NULL;
+        return INVALID_EXPRESSION;
       }
       *index += (str_end - *ex); // update index
       *ex = str_end;
       new_token->type = OPERAND;
       new_token->val.hex_bin = bin;
       new_token->next = NULL;
-      return new_token;
+      return OK;
     } else {
       // floating / decimal numbers
       double fp = strtod(*ex, &str_end);
@@ -148,35 +158,32 @@ token_t *tokanizer(expression_t *ex, int *index) {
       new_token->type = OPERAND;
       new_token->val.num = fp;
       new_token->next = NULL;
-      return new_token;
+      return OK;
       // TO DO long integer if double overflows
     }
   } else if (isalpha(**ex)) {
     (*ex)++;
     (*index)++;
-    return NULL;
+    return INVALID_EXPRESSION;
   } else if (**ex == ' ') {
     (*ex)++; // ignore white space
     (*index)++;
-    return NULL;
+    return ERROR;
   } else {
     // special chars / operators
-    operator_t op =
-        char_to_op(ex, index); // this will handle increamenting ex pointer.
-    if (op.s == _invalid_sign) {
-      printf("\n>> Invalid operator: %c", **ex);
-      free(new_token);
-      return NULL;
-    }
-    if (op.s == _neg || op.s == _pos) {
-      new_token->type = UNARY_OP;
-    } else {
-      new_token->type = OPERATOR;
+    operator_t op;
+
+    if (char_to_op(ex, index, &op) == OK)// this will handle increamenting ex pointer.
+    {
+       if (op.s == _neg || op.s == _pos) {
+         new_token->type = UNARY_OP;
+       } else {
+         new_token->type = OPERATOR;
+       }
     }
     new_token->val.op = op;
     new_token->next = NULL;
-    return new_token;
+    return OK;
   }
-  free(new_token);
-  return NULL;
+  return INVALID_EXPRESSION;
 }

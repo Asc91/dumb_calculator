@@ -1,6 +1,7 @@
 #ifndef _TOKEN_H_
 #define _TOKEN_H_
 
+#include "../include/error.h"
 #include <stdbool.h>
 
 typedef enum sign {
@@ -67,21 +68,20 @@ typedef struct token_queue {
 
 typedef char *expression_t;
 
+void stack_push(token_stack_t *top, token_t *token);
 
-void stack_push(token_stack_t *top, token_t *token); 
-
-token_t *stack_pop(token_stack_t *top);
+err_t stack_pop(token_stack_t *top, token_t **pop);
 
 void init_token_queue(token_queue_t *q);
 
-void enqueue(token_queue_t *q, token_t *token); 
+void enqueue(token_queue_t *q, token_t *token);
 
-token_t *dequeue(token_queue_t *q);
+err_t dequeue(token_queue_t *q, token_t **deq);
 
-bool is_unary(expression_t *ex, int *index);
+err_t is_unary(expression_t *ex, int *index);
 
-operator_t char_to_op(expression_t * ex, int *index);
+err_t char_to_op(expression_t *ex, int *index, operator_t *op);
 
-token_t *tokanizer(expression_t *ex, int *index);
+err_t tokanizer(expression_t *ex, int *index, token_t *new_token);
 
 #endif
