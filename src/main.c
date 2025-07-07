@@ -5,105 +5,181 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+#include "glib.h"
+#include <gtk/gtk.h>  
 
-#define MAX_SN64 9223372036854775808
-#define MAX_SP64 9223372036854775807
-#define MAX_U64 18446744073709551615
+gboolean result_shown = FALSE;
+gboolean error_shown = FALSE;
 
-#define INPUT_LIMIT 25
+void all_clear_cb(GSimpleAction *action, GVariant *parameter,
+                  gpointer user_data)
+{
+  GtkEntry *entry = GTK_ENTRY(user_data);
+  gtk_entry_set_text(entry, "");
+}
 
-enum commands { Convert, Eval, Exit, Help };
+void clear_on_input_cb(GtkEditable *editable,
+                       const gchar *new_text,
+                       gint new_text_length,
+                       gint *position,
+                       gpointer user_data)
+{
+  GtkBuilder *builder = GTK_BUILDER(user_data);
+  GtkEntry *entry = GTK_ENTRY(gtk_builder_get_object(builder, "calc_display"));
+  GtkTextView *error_box = GTK_TEXT_VIEW(gtk_builder_get_object(builder, "calc_error_box"));
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(error_box);
+
+  if (new_text_length == 0)
+  {
+    return; // No input, do nothing
+  }else {
+    // entered operator after result, continue expression
+    if(!isdigit(new_text[0]) && !isalpha(new_text[0]) && result_shown){
+      const gchar *current = gtk_entry_get_text(entry);
+      *position = g_utf8_strlen(current, -1);
+      result_shown = FALSE;
+    }else {
+      // new input, clear previous result 
+      if (result_shown)
+      {
+        gtk_entry_set_text(entry, "");
+        result_shown = FALSE;
+      }
+    }
+    // if error is shown, clear it
+    if (error_shown)
+      {
+        gtk_text_buffer_set_text(buffer, "", -1);
+        error_shown = FALSE;
+      }
+  }
+  
+}
+
+void del_buffer_cb(GSimpleAction *action, GVariant *parameter,
+                   gpointer user_data)
+{
+  GtkEntry *entry = GTK_ENTRY(user_data);
+  const gchar *old_text = gtk_entry_get_text(entry);
+
+  gsize size = strlen(old_text);
+  if (size == 0)
+  {
+    return;
+  }
+  gchar *new_text = g_strndup(old_text, size - 1);
+  gtk_entry_set_text(entry, new_text);
+
+  g_free(new_text);
+}
+
+void eval_cb(GSimpleAction *action, GVariant *parameter,
+             gpointer user_data) 
+{
+  GtkBuilder *builder = GTK_BUILDER(user_data);
+  GtkEntry *entry = GTK_ENTRY(gtk_builder_get_object(builder, "calc_display"));
+  GtkTextView *error_box = GTK_TEXT_VIEW(gtk_builder_get_object(builder, "calc_error_box"));
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(error_box);
+
+  const gchar *input = gtk_entry_get_text(entry);
+
+  token_t result;
+  err_t err = eval_expression(g_strdup(input), &result);
+  if (err != OK) {
+    gtk_text_buffer_set_text(buffer, get_error_message(err), -1);
+    error_shown = TRUE;
+  }else {
+    gtk_entry_set_text(entry, g_strdup_printf("%.2lf", result.val.num));
+    result_shown = TRUE;
+  }
+}
+
+void enter_key_cb(GtkEntry *entry, gpointer user_data)
+{
+  eval_cb(NULL, NULL, user_data);  
+}
+
+static void push_buffer_cb(GSimpleAction *action, GVariant *parameter,
+                           gpointer user_data)
+{
+  const gchar *input = g_variant_get_string(parameter, NULL);
+
+  GtkEntry *entry = GTK_ENTRY(user_data);
+  const gchar *old_text = gtk_entry_get_text(entry);
+
+  gchar *new_text = g_strconcat(old_text, input, NULL);
+  gtk_entry_set_text(entry, new_text);
+
+  g_free(new_text);
+}
+void toggle_op_pad_cb(GSimpleAction *action, GVariant *state,
+                      gpointer user_data)
+{
+  GtkStack *op_stack = GTK_STACK(user_data);
+  gboolean is_bitwise = g_variant_get_boolean(state);
+  gtk_stack_set_visible_child_name(op_stack,
+                                   is_bitwise ? "bitwise_op_pad" : "arithmetic_op_pad");
+  g_simple_action_set_state(action, state);
+}
 
 // main
 int main() {
-  printf("\n>> Welcome to Programming calculator!");
-  printf("\n>> You are in eval mode. Use Help to get command list.");
-  do {
-    // Get input
-    char input[INPUT_LIMIT] = {'\0'};
-    printf("\n>> ");
-    if (fgets(input, sizeof(input), stdin) == NULL) {
-      printf("\n>> Error reading input. Please try again.");
-      flush_stdin();
-      continue;
-    }
+  GtkBuilder *builder;
+  GObject *window;
+  GError *error = NULL;
+  GObject *entry;
+  GObject *op_stack;
 
-    // Check for input buffer overflow
-    char *str_end = strchr(input, '\n');
-    if (str_end == NULL) {
-      printf("\n>> Your expression was larger than %d characters.",
-             INPUT_LIMIT);
-      printf("\n>> Enter something smaller.");
-      flush_stdin();
-      continue;
-    } else {
-      *str_end = '\0';
-    }
+  gtk_init(NULL, NULL);
 
-    // Check if input is command or expression.
-    if (!strcmp(input, "Help")) {
-      printf("\n>> 1. Eval: To evaluate expressions, supports arithmetic and "
-             "bitwise operations.");
-      printf("\n>> 2. Convert: To interconvert binary, hex and decimal");
-      printf("\n>> 3. Exit: To exit programme.");
-      printf("\n>> 4. Help: To print this text.");
-    } else if (!strcmp(input, "Eval")) {
-      printf("\n>> You are in eval mode. Enter expression to evaluate.");
-    } else if (!strcmp(input, "Convert")) {
-      printf("\n>> You are in convert mode. Enter value to convert.");
-    } else if (!strcmp(input, "Exit")) {
-      printf("\n>> Exiting Programme");
-      return 0;
-    } else {
-      size_t size = labs(input - str_end);
-      char *ex = malloc(size + 1);
-      if (ex == NULL) {
-        printf("\n>> Err: Out of memory, %s:%d", __FILE__, __LINE__);
-        exit(2);
-      }
-      memcpy(ex, input, size + 1);
-      char *ex_orig = ex;
+  builder = gtk_builder_new();
+  if (gtk_builder_add_from_resource(builder, "/asc91/dumb-calc/calc-gtk.ui", &error) == 0)
+  {
+    g_printerr("Error loading file: %s\n", error->message);
+    g_clear_error(&error);
+    return 1;
+  }
 
-      token_queue_t rpn; 
-      err_t err = create_rpn(&ex, &rpn);
-      if (err != OK) {
-        if (err == INVALID_EXPRESSION){
-          printf("\n>> Invalid expression. Please try again.");
-        } else if (err == OUT_OF_MEMORY) {
-          printf("\n>> Err: Out of memory, %s:%d", __FILE__, __LINE__);
-          free(ex_orig);
-          exit(2);
-        } else {
-          printf("\n>> Something went wrong, %s:%d", __FILE__, __LINE__);
-        }
-        free(ex_orig);
-        continue;
-      }
-      free(ex_orig);
+  window = gtk_builder_get_object(builder, "calc_window");
+  entry = gtk_builder_get_object(builder, "calc_display");
+  op_stack = gtk_builder_get_object(builder, "calc_op_stack");
 
-      log_rpn(&rpn);
-      token_t *result;
-      err = eval_rpn(&rpn, &result);
-      if (err == OK) {
-        printf("\n>> Result: %.2f\n", result->val.num);
-        free(result);
-      } else if (err == OUT_OF_MEMORY) {
-        printf("\n>> Err: Out of memory");
-        exit(2);
-      } else if (err == DIVISION_BY_ZERO) {
-        printf("\n>> Division by zero error");
-      } else if (err == INVALID_EXPRESSION) {
-        printf("\n>> Invalid expression. Please try again.");
-      } else{
-        printf("\n>> Something went wrong");
-      }
-      
-     
-      continue;
-    
-    }
-    // fall
-  } while (1);
+  gtk_widget_show_all(GTK_WIDGET(window));
 
+  GSimpleAction *all_clear =
+      g_simple_action_new("all_clear", NULL);
+  g_signal_connect(all_clear, "activate", G_CALLBACK(all_clear_cb), entry);
+  g_action_map_add_action(G_ACTION_MAP(GTK_APPLICATION_WINDOW(window)),
+                          G_ACTION(all_clear));
+
+  GSimpleAction *del_buffer =
+      g_simple_action_new("del_buffer", NULL);
+  g_signal_connect(del_buffer, "activate", G_CALLBACK(del_buffer_cb), entry);
+  g_action_map_add_action(G_ACTION_MAP(GTK_APPLICATION_WINDOW(window)),
+                          G_ACTION(del_buffer));
+
+  GSimpleAction *eval = g_simple_action_new("eval", NULL);
+  g_signal_connect(eval, "activate", G_CALLBACK(eval_cb), builder);
+  g_action_map_add_action(G_ACTION_MAP(GTK_APPLICATION_WINDOW(window)), G_ACTION(eval));
+  g_signal_connect(GTK_ENTRY(entry), "activate", G_CALLBACK(enter_key_cb), builder);
+
+  GSimpleAction *push_buffer =
+      g_simple_action_new("push_buffer", G_VARIANT_TYPE_STRING);
+  g_signal_connect(push_buffer, "activate", G_CALLBACK(push_buffer_cb), entry);
+  g_action_map_add_action(G_ACTION_MAP(GTK_APPLICATION_WINDOW(window)),
+                          G_ACTION(push_buffer));
+
+  GVariant *toggle_state = g_variant_new_boolean(FALSE);
+  GSimpleAction *toggle_op_pad =
+      g_simple_action_new_stateful("toggle_op_pad", NULL,
+                                   toggle_state);
+  g_signal_connect(toggle_op_pad, "change-state", G_CALLBACK(toggle_op_pad_cb), op_stack);
+  g_action_map_add_action(G_ACTION_MAP(GTK_APPLICATION_WINDOW(window)),
+                          G_ACTION(toggle_op_pad));
+  g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+  g_signal_connect(GTK_ENTRY(entry), "insert-text", G_CALLBACK(clear_on_input_cb), builder);
+  gtk_main();
   return 0;
 }

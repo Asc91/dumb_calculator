@@ -38,7 +38,8 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
         log_queue(queue);
         token_t *tmp = NULL;
         while (1) {
-          if (stack_pop(&stack, &tmp) != OK) {
+          tmp = stack_pop(&stack);
+          if (tmp == NULL) {
             LOG_ERROR(
                 "\n>> Should have found l_bracket before stack end, %s:%d",
                 __FILE__, __LINE__);
@@ -49,7 +50,7 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
           if (tmp->val.op.s != _l_bracket) {
             enqueue(queue, tmp);
           } else {
-            break; // got _l_breaket removed from stack
+            break; // got _l_braket removed from stack
           }
         }
       }
@@ -58,7 +59,7 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
       while (stack != NULL && stack->type != BRACKET) {
         if ((tok->val.op.p <= stack->val.op.p && tok->val.op.a == l_to_r)
         || (tok->val.op.p < stack->val.op.p && tok->val.op.a == r_to_l)) {
-          if (stack_pop(&stack, &tmp) != OK){
+          if ((tmp = stack_pop(&stack)) == NULL) {
             LOG_ERROR("\n>> Err: Something went wrong, %s:%d", __FILE__, __LINE__);
             free(tok);
             return ERROR;
@@ -73,7 +74,7 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
   } while (**ex != '\0');
 
   token_t * tmp;
-  while (stack_pop(&stack, &tmp) == OK){
+  while ((tmp = stack_pop(&stack)) != NULL){
     enqueue(queue, tmp);
   }
   return OK;

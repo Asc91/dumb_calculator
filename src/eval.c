@@ -1,8 +1,10 @@
 #include "../include/eval.h"
 #include "../include/token.h"
 #include "../include/logger.h"
+#include "../include/rpn.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 err_t eval_op(double left, double right, operator_t op, token_val_t *result) {
   switch (op.s) {
@@ -48,14 +50,14 @@ err_t eval_op(double left, double right, operator_t op, token_val_t *result) {
   return OK;
 }
 
-err_t eval_rpn(token_queue_t *queue, token_t **result) {
+err_t eval_rpn(token_queue_t *queue, token_t *result) {
   if (queue->head == NULL) {
     LOG_WARN("\n>> Got empty token queue %s:%d", __FILE__, __LINE__);
     return INVALID_EXPRESSION;
   }
   token_stack_t stack = NULL;
   token_t *tok;
-  while (dequeue(queue, &tok) == OK) {
+  while ((tok = dequeue(queue)) != NULL) {
     if (tok->type == OPERAND) {
       stack_push(&stack, tok);
     } else {
@@ -71,13 +73,13 @@ err_t eval_rpn(token_queue_t *queue, token_t **result) {
       */
       token_t *left = NULL, *right = NULL; 
       err_t err = ERROR;
-      if (stack_pop(&stack, &right) != OK) {
+      if ((right = stack_pop(&stack)) == NULL) {
         printf("\n>> Invalid expression");
         free(intermidiate);
         return INVALID_EXPRESSION;
       }
       if (tok->type == OPERATOR) {
-        if (stack_pop(&stack, &left) != OK) {
+        if ((left = stack_pop(&stack)) == NULL) {
           LOG_WARN("\n>> Invalid expression %s:%d", __FILE__, __LINE__);
           free(intermidiate);
           return INVALID_EXPRESSION;
@@ -107,9 +109,49 @@ err_t eval_rpn(token_queue_t *queue, token_t **result) {
     LOG_WARN("\n>> Invalid expression");
     return INVALID_EXPRESSION;
   }
-  if (stack_pop(&stack, result) != OK) {
+  token_t *tmp = stack_pop(&stack);
+  if (tmp == NULL) {
     LOG_ERROR("\n>> Err: Something went wrong, %s:%d", __FILE__, __LINE__);
     return ERROR;
   }
+  *result = *tmp;
+  return OK;
+}
+
+err_t eval_expression(char *expression, token_t *result) {
+  if (expression == NULL ){
+    return EMPTY_INPUT;
+  }
+
+  char * strend = strchr(expression, '\0');
+  if (strend == NULL || strend == expression) {
+    return EMPTY_INPUT;
+  }
+
+  size_t size = labs(expression - strend);
+  if (size > INPUT_LIMIT) {
+    return TOO_LONG_INPUT;
+  }
+
+  char *ex = malloc(size + 1);
+  if (ex == NULL) {
+    return OUT_OF_MEMORY;
+  }
+
+  memcpy(ex, expression, size + 1);
+  char *ex_orig = ex;
+  
+  token_queue_t rpn; 
+  err_t err = create_rpn(&ex, &rpn);
+  free(ex_orig);
+  if (err != OK) {
+    return err;
+  }
+
+  err = eval_rpn(&rpn, result);
+  if (err != OK) {
+    return err;
+  }
+  
   return OK;
 }

@@ -17,18 +17,22 @@ const operator_t ops[] = {
 };
 
 void stack_push(token_stack_t *top, token_t *token) {
+  if (token == NULL) {
+    LOG_WARN("\n>> Got null token %s:%d", __func__, __LINE__);
+    return;
+  }
   token->next = *top;
   *top = token;
 }
 
-err_t stack_pop(token_stack_t *top, token_t **pop) {
-  if (*top == NULL) {
+token_t *stack_pop(token_stack_t *stack) {
+  if (*stack== NULL) {
     LOG_WARN("\n>> Reached end of stack %s:%d", __func__, __LINE__);
-    return ERROR;
+    return NULL;
   }
-  *pop = *top;
-  *top = (*top)->next;
-  return OK;
+  token_t *poped= *stack;
+  *stack = (*stack)->next;
+  return poped;
 }
 
 void init_token_queue(token_queue_t *q) {
@@ -37,6 +41,10 @@ void init_token_queue(token_queue_t *q) {
 }
 
 void enqueue(token_queue_t *q, token_t *token) {
+  if (token == NULL) {
+    LOG_WARN("\n>> Got null token %s:%d", __func__, __LINE__);
+    return;
+  }
   if (q->tail != NULL) {
     q->tail->next = token;
   } else {
@@ -45,14 +53,14 @@ void enqueue(token_queue_t *q, token_t *token) {
   q->tail = token;
 }
 
-err_t dequeue(token_queue_t *q, token_t **deq) {
+token_t *dequeue(token_queue_t *q) {
   if (q->head == NULL) {
     LOG_WARN("\n>> Queue is empty. %s:%d", __FILE__, __LINE__);
-    return ERROR;
+    return NULL;
   }
-  *deq = q->head;
+  token_t *deq = q->head;
   q->head = q->head->next;
-  return OK;
+  return deq;
 }
 
 void log_queue(token_queue_t *queue) {

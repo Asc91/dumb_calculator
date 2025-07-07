@@ -72,13 +72,13 @@ typedef char *expression_t;
 
 void stack_push(token_stack_t *top, token_t *token);
 
-err_t stack_pop(token_stack_t *top, token_t **pop);
+token_t *stack_pop(token_stack_t *top);
 
 void init_token_queue(token_queue_t *q);
 
 void enqueue(token_queue_t *q, token_t *token);
 
-err_t dequeue(token_queue_t *q, token_t **deq);
+token_t *dequeue(token_queue_t *q);
 
 void log_queue(token_queue_t *queue);
 
