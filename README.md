@@ -1,10 +1,9 @@
 # What works
-- simple arithmetic expressions
+- simple arithmetic expressions (BODMAS)
+- simple bitshift operations (l_shift, r_shift, and, or)
 
 # what doesn't work
-- brackets
-- anything other than numbers operations (bitwise operations, hex, binary etc) 
-
+- Hex or binary numbers, exponentials or complex functions 
 
 # How does it work
 - Takes expression as stdin input
@@ -14,10 +13,11 @@
 
 
 # What I want to add next
-- improve error handling
-- brackets, hex and binary 
-- add minimal UI with Qt
-- maybe fuzzy testing
+- [x] improve error handling
+- [x] brackets
+- [ ] hex and binary 
+- [ ] add minimal UI with Qt
+- [ ] maybe fuzzy testing
 
 
 # Why am I doing this?
