@@ -2,7 +2,6 @@
 #include "../include/error.h"
 #include "../include/logger.h"
 #include <ctype.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,7 +11,8 @@ const operator_t ops[] = {
     {_mult, mult_div, l_to_r},   {_div, mult_div, l_to_r},
     {_r_shift, shift, l_to_r},   {_l_shift, shift, l_to_r},
     {_or, bit_or, l_to_r},       {_and, bit_and, l_to_r},
-    {_neg, unary_minus, r_to_l}, {_pos, unary_plus, r_to_l},
+    {_neg, unary, r_to_l},       {_pos, unary, r_to_l},
+    {_l_bracket, bracket, l_to_r},{_r_bracket, bracket, l_to_r},
     {_invalid_sign, 0, 0},
 };
 
@@ -99,7 +99,7 @@ err_t is_unary(expression_t *ex, int *index) {
   } else if (!isdigit(*(*ex - 1)) && !isalpha(*(*ex - 1))) {
     return OK;
   }
-  return ERROR; 
+  return ERROR;
 }
 
 err_t char_to_op(expression_t *ex, int *index, operator_t *op) {
@@ -145,9 +145,15 @@ err_t char_to_op(expression_t *ex, int *index, operator_t *op) {
   case '|':
     *op = ops[_or];
     break;
+  case '(':
+    *op = ops[_l_bracket];
+    break;
+  case ')':
+    *op = ops[_r_bracket];
+    break;
   default:
     *op = ops[_invalid_sign];
-    return INVALID_EXPRESSION; 
+    return INVALID_EXPRESSION;
   }
   (*index)++;
   (*ex)++;
@@ -212,11 +218,13 @@ err_t tokanizer(expression_t *ex, int *index, token_t *new_token) {
 
     if (char_to_op(ex, index, &op) == OK)// this will handle increamenting ex pointer.
     {
-       if (op.s == _neg || op.s == _pos) {
-         new_token->type = UNARY_OP;
-       } else {
-         new_token->type = OPERATOR;
-       }
+      if (op.s == _neg || op.s == _pos) {
+        new_token->type = UNARY_OP;
+      } else if (op.s == _l_bracket || op.s == _r_bracket) {
+        new_token->type = BRACKET;
+      } else {
+        new_token->type = OPERATOR;
+      }
     }
     new_token->val.op = op;
     new_token->next = NULL;

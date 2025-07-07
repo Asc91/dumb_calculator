@@ -15,6 +15,8 @@ typedef enum sign {
   _and,
   _neg,
   _pos,
+  _l_bracket,
+  _r_bracket,
   _invalid_sign,
 } sign_t;
 
@@ -25,8 +27,8 @@ typedef enum precedence // should be ascending order of precedence
   shift,
   add_sub,
   mult_div,
-  unary_minus,
-  unary_plus,
+  unary,
+  bracket,
 } precedence_t;
 
 typedef enum associativity_t {
@@ -77,6 +79,10 @@ void init_token_queue(token_queue_t *q);
 void enqueue(token_queue_t *q, token_t *token);
 
 err_t dequeue(token_queue_t *q, token_t **deq);
+
+void log_queue(token_queue_t *queue);
+
+void log_stack(token_stack_t *stack);
 
 err_t is_unary(expression_t *ex, int *index);
 

@@ -2,7 +2,6 @@
 #include "../include/logger.h"
 #include "../include/token.h"
 #include "../include/error.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 err_t create_rpn(expression_t *ex, token_queue_t *queue) {
@@ -28,22 +27,47 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
       }
       continue;
     }
-    
+
     if (tok->type == OPERAND) {
       enqueue(queue, tok);
+    } else if (tok->type == BRACKET) {
+      if (tok->val.op.s == _l_bracket) {
+        stack_push(&stack, tok);
+      } else {
+        log_stack(&stack);
+        log_queue(queue);
+        token_t *tmp = NULL;
+        while (1) {
+          if (stack_pop(&stack, &tmp) != OK) {
+            LOG_ERROR(
+                "\n>> Should have found l_bracket before stack end, %s:%d",
+                __FILE__, __LINE__);
+            free(tok);
+            return INVALID_EXPRESSION;
+          }
+          LOG_INFO("\n>> op_s %d", tmp->val.op.s);
+          if (tmp->val.op.s != _l_bracket) {
+            enqueue(queue, tmp);
+          } else {
+            break; // got _l_breaket removed from stack
+          }
+        }
+      }
     } else if (tok->type == OPERATOR || tok->type == UNARY_OP) {
       token_t * tmp;
-      while (stack != NULL && tok->val.op.p <= stack->val.op.p) {
+      while (stack != NULL && stack->type != BRACKET) {
         if ((tok->val.op.p <= stack->val.op.p && tok->val.op.a == l_to_r)
-            || (tok->val.op.p < stack->val.op.p && tok->val.op.a == r_to_l)) {
-            if (stack_pop(&stack, &tmp) != OK){
-              LOG_ERROR("\n>> Err: Something went wrong, %s:%d", __FILE__, __LINE__);
-              free(tok);
-              return ERROR;
-            }
-            enqueue(queue,tmp);
+        || (tok->val.op.p < stack->val.op.p && tok->val.op.a == r_to_l)) {
+          if (stack_pop(&stack, &tmp) != OK){
+            LOG_ERROR("\n>> Err: Something went wrong, %s:%d", __FILE__, __LINE__);
+            free(tok);
+            return ERROR;
+          }
+          enqueue(queue,tmp);
+        } else {
+          break;
         }
-      } 
+      }
       stack_push(&stack, tok);
     }
   } while (**ex != '\0');
