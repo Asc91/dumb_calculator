@@ -55,6 +55,43 @@ err_t dequeue(token_queue_t *q, token_t **deq) {
   return OK;
 }
 
+void log_queue(token_queue_t *queue) {
+  if (queue->head == NULL) {
+    LOG_INFO("\n>> got null token queue");
+    return;
+  }
+  token_t *tok = queue->head;
+  LOG_INFO("\n>> Queue: ");
+  while (tok != NULL) {
+    if (tok->type == OPERAND) {
+      LOG_INFO("N %lf ->", tok->val.num);
+    } else if (tok->type == OPERATOR) {
+      LOG_INFO("O %d ->", tok->val.op.s);
+    } else if (tok->type == UNARY_OP) {
+      LOG_INFO("O %d ->", tok->val.op.s);
+    }
+    tok = tok->next;
+  }
+}
+void log_stack(token_stack_t *stack) {
+  if (stack == NULL) {
+    LOG_INFO("\n>> Empty stack");
+    return;
+  }
+  token_t *tok = *stack;
+  LOG_INFO("\n>> Stack: ");
+  while (tok != NULL) {
+    if (tok->type == OPERAND) {
+      LOG_INFO("N %lf ->", tok->val.num);
+    } else if (tok->type == OPERATOR) {
+      LOG_INFO("O %d ->", tok->val.op.s);
+    } else if (tok->type == UNARY_OP) {
+      LOG_INFO("O %d ->", tok->val.op.s);
+    }
+    tok = tok->next;
+  }
+}
+
 err_t is_unary(expression_t *ex, int *index) {
   if (*index == 0) // first char
   {
