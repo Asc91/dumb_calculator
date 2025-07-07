@@ -5,3 +5,5 @@ debug
 .vscode/
 obj/
 vgcore.*
+.cache/
+compile_commands.json
