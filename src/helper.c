@@ -1,15 +1,6 @@
 #include "../include/helper.h"
-#include <stdio.h>
-// Helper functions
-void flush_stdin()
-{
-  int ch;
-  do
-  {
-    ch = getchar();
-  } while (ch != '\n' && ch != EOF);
-}
-
+#include <ctype.h>
+#include <stdlib.h>
 
 // updates string in place, ALWAYS pass copy of string
 void remove_whitespace(char *str)
