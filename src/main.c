@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../include/logger.h"
 
 gboolean result_shown = FALSE;
 gboolean error_shown = FALSE;
@@ -99,16 +100,13 @@ void enter_key_cb(GtkEntry *entry, gpointer user_data) {
 }
 
 static void push_buffer_cb(GSimpleAction *action, GVariant *parameter,
-                           gpointer user_data) {
+                           gpointer user_data) 
+{
+  GtkEditable *entry = GTK_EDITABLE(user_data);
+  gint pos = gtk_editable_get_position(entry);
   const gchar *input = g_variant_get_string(parameter, NULL);
-
-  GtkEntry *entry = GTK_ENTRY(user_data);
-  const gchar *old_text = gtk_entry_get_text(entry);
-
-  gchar *new_text = g_strconcat(old_text, input, NULL);
-  gtk_entry_set_text(entry, new_text);
-
-  g_free(new_text);
+  gtk_editable_insert_text(entry, input, -1, &pos);
+  gtk_editable_set_position(entry, pos);
 }
 void toggle_op_pad_cb(GSimpleAction *action, GVariant *state,
                       gpointer user_data) {
