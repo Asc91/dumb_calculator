@@ -55,8 +55,8 @@ err_t eval_binary_op(operand_t left, operand_t right, operator_t op, token_val_t
     return OK;
   } else {
     result->operand.type = HEXADECIMAL;
-    uint64_t left_hex = left.type == HEXADECIMAL ? left.val.hex_bin : (uint64_t)left.val.dec;
-    uint64_t right_hex = right.type == HEXADECIMAL ? right.val.hex_bin : (uint64_t)right.val.dec;
+    uint64_t left_hex = left.type != DECIMAL ? left.val.hex_bin : (uint64_t)left.val.dec;
+    uint64_t right_hex = right.type != DECIMAL ? right.val.hex_bin : (uint64_t)right.val.dec;
 
     switch(op.s)
     {
