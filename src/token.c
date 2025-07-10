@@ -7,13 +7,12 @@
 
 const operator_t ops[] = {
     // should match sign enum
-    {_add, add_sub, l_to_r},     {_sub, add_sub, l_to_r},
-    {_mult, mult_div, l_to_r},   {_div, mult_div, l_to_r},
-    {_r_shift, shift, l_to_r},   {_l_shift, shift, l_to_r},
-    {_or, bit_or, l_to_r},       {_and, bit_and, l_to_r},
-    {_neg, unary, r_to_l},       {_pos, unary, r_to_l},
-    {_l_bracket, bracket, l_to_r},{_r_bracket, bracket, l_to_r},
-    {_invalid_sign, 0, 0},
+    {ADD, ADD_SUB, L_TO_R, BINARY_OP},     {SUB, ADD_SUB, L_TO_R, BINARY_OP},
+    {MULT, MULT_DIV, L_TO_R, BINARY_OP},   {DIV, MULT_DIV, L_TO_R, BINARY_OP},
+    {R_SHIFT, SHIFT, L_TO_R, BINARY_OP},   {L_SHIFT, SHIFT, L_TO_R, BINARY_OP},
+    {OR, BIT_OR, L_TO_R, BINARY_OP},       {AND, BIT_AND, L_TO_R, BINARY_OP},
+    {NEG, UNARY, R_TO_L, UNARY_OP},       {POS, UNARY, R_TO_L, UNARY_OP},
+    {INVALID_SIGN, INVALID_P, INVALID_A, INVALID_OP},
 };
 
 void stack_push(token_stack_t *top, token_t *token) {
@@ -72,10 +71,16 @@ void log_queue(token_queue_t *queue) {
   LOG_INFO("\n>> Queue: ");
   while (tok != NULL) {
     if (tok->type == OPERAND) {
-      LOG_INFO("N %lf ->", tok->val.num);
+      if (tok->val.operand.type == HEXADECIMAL) {
+        LOG_INFO("N 0x%lx ->", tok->val.operand.val.hex_bin);
+      } else if (tok->val.operand.type == BINARY) {
+        // To do: implement binary logging
+        LOG_INFO("N 0x%lx ->", tok->val.operand.val.hex_bin);
+      } else if (tok->val.operand.type == DECIMAL)
+      {
+        LOG_INFO("N %.2lf ->", tok->val.operand.val.dec);
+      }
     } else if (tok->type == OPERATOR) {
-      LOG_INFO("O %d ->", tok->val.op.s);
-    } else if (tok->type == UNARY_OP) {
       LOG_INFO("O %d ->", tok->val.op.s);
     }
     tok = tok->next;
@@ -90,10 +95,15 @@ void log_stack(token_stack_t *stack) {
   LOG_INFO("\n>> Stack: ");
   while (tok != NULL) {
     if (tok->type == OPERAND) {
-      LOG_INFO("N %lf ->", tok->val.num);
+      if (tok->val.operand.type == HEXADECIMAL) {
+        LOG_INFO("N 0x%lx ->", tok->val.operand.val.hex_bin);
+      } else if (tok->val.operand.type == BINARY) {
+        // To do: implement binary logging
+        LOG_INFO("N 0x%lx ->", tok->val.operand.val.hex_bin);
+      } else if (tok->val.operand.type == DECIMAL) {
+        LOG_INFO("N %.2lf ->", tok->val.operand.val.dec);
+      }
     } else if (tok->type == OPERATOR) {
-      LOG_INFO("O %d ->", tok->val.op.s);
-    } else if (tok->type == UNARY_OP) {
       LOG_INFO("O %d ->", tok->val.op.s);
     }
     tok = tok->next;
@@ -110,18 +120,21 @@ err_t is_unary(expression_t *ex, int *index) {
   return ERROR;
 }
 
-err_t char_to_op(expression_t *ex, int *index, operator_t *op) {
+err_t char_to_token(expression_t *ex, int *index, token_t *new_token) {
+  // everything except brackets is operator here
+  new_token->type = OPERATOR;
+
   // for operators with multiple chars
   if (strncmp(*ex, ">>", 2) == 0) {
     LOG_INFO("Found right shift operator");
     (*index) += 2;
     *ex = *ex + 2;
-    *op = ops[_r_shift];
+    new_token->val.op = ops[R_SHIFT];
     return OK;
   } else if (strncmp(*ex, "<<", 2) == 0) {
     (*index) += 2;
     *ex = *ex + 2;
-    *op = ops[_l_shift];
+    new_token->val.op = ops[L_SHIFT];
     return OK;
   }
 
@@ -129,38 +142,40 @@ err_t char_to_op(expression_t *ex, int *index, operator_t *op) {
   switch (**ex) {
   case '+':
     if(is_unary(ex, index) == OK) {
-      *op = ops[_pos];
+      new_token->val.op = ops[POS];
     } else {
-      *op = ops[_add];
+      new_token->val.op = ops[ADD];
     }
     break;
   case '-':
     if (is_unary(ex, index) == OK) {
-      *op = ops[_neg];
+      new_token->val.op = ops[NEG];
     } else {
-      *op = ops[_sub];
+      new_token->val.op = ops[SUB];
     }
     break;
   case '*':
-    *op = ops[_mult];
+    new_token->val.op = ops[MULT];
     break;
   case '/':
-    *op = ops[_div];
+    new_token->val.op = ops[DIV];
     break;
   case '&':
-    *op = ops[_and];
+    new_token->val.op = ops[AND];
     break;
   case '|':
-    *op = ops[_or];
+    new_token->val.op = ops[OR];
     break;
   case '(':
-    *op = ops[_l_bracket];
+    new_token->type = BRACKET;
+    new_token->val.bracket = L_BRACKET;
     break;
   case ')':
-    *op = ops[_r_bracket];
+    new_token->type = BRACKET;
+    new_token->val.bracket = R_BRACKET;
     break;
   default:
-    *op = ops[_invalid_sign];
+   new_token->val.op = ops[INVALID_SIGN];
     return INVALID_EXPRESSION;
   }
   (*index)++;
@@ -179,7 +194,7 @@ err_t tokanizer(expression_t *ex, int *index, token_t *new_token) {
 
     // Hex numbers and binary numbers
     if (strncmp(*ex, "0x", 2) == 0 || strncmp(*ex, "0X", 2) == 0) {
-      long int hex = strtol(*ex, &str_end, 16);
+      uint64_t hex = strtoull(*ex, &str_end, 16);
       if (isalpha(*str_end)) // found non-hex character
       {
         return INVALID_EXPRESSION;
@@ -187,18 +202,20 @@ err_t tokanizer(expression_t *ex, int *index, token_t *new_token) {
       *index += (str_end - *ex); // update index
       *ex = str_end;
       new_token->type = OPERAND;
-      new_token->val.hex_bin = hex;
+      new_token->val.operand.type = HEXADECIMAL;
+      new_token->val.operand.val.hex_bin = hex;
       new_token->next = NULL;
       return OK;
     } else if (strncmp(*ex, "0b", 2) == 0 || strncmp(*ex, "0B", 2) == 0) {
-      long int bin = strtol(*ex + 2, &str_end, 2);
+      uint64_t bin = strtoull(*ex + 2, &str_end, 2);
       if (isdigit(*str_end)) {
         return INVALID_EXPRESSION;
       }
       *index += (str_end - *ex); // update index
       *ex = str_end;
       new_token->type = OPERAND;
-      new_token->val.hex_bin = bin;
+      new_token->val.operand.type = BINARY;
+      new_token->val.operand.val.hex_bin = bin;
       new_token->next = NULL;
       return OK;
     } else {
@@ -207,7 +224,8 @@ err_t tokanizer(expression_t *ex, int *index, token_t *new_token) {
       *index += (str_end - *ex); // update index
       *ex = str_end;
       new_token->type = OPERAND;
-      new_token->val.num = fp;
+      new_token->val.operand.type = DECIMAL;
+      new_token->val.operand.val.dec = fp;
       new_token->next = NULL;
       return OK;
       // TO DO long integer if double overflows
@@ -221,20 +239,10 @@ err_t tokanizer(expression_t *ex, int *index, token_t *new_token) {
     (*index)++;
     return ERROR;
   } else {
-    // special chars / operators
-    operator_t op;
-
-    if (char_to_op(ex, index, &op) == OK)// this will handle increamenting ex pointer.
+    if (char_to_token(ex, index, new_token) != OK)// this will handle increamenting ex pointer.
     {
-      if (op.s == _neg || op.s == _pos) {
-        new_token->type = UNARY_OP;
-      } else if (op.s == _l_bracket || op.s == _r_bracket) {
-        new_token->type = BRACKET;
-      } else {
-        new_token->type = OPERATOR;
-      }
+      return INVALID_EXPRESSION;
     }
-    new_token->val.op = op;
     new_token->next = NULL;
     return OK;
   }

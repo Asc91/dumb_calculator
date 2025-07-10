@@ -31,7 +31,7 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
     if (tok->type == OPERAND) {
       enqueue(queue, tok);
     } else if (tok->type == BRACKET) {
-      if (tok->val.op.s == _l_bracket) {
+      if (tok->val.bracket == L_BRACKET) {
         stack_push(&stack, tok);
       } else {
         log_stack(&stack);
@@ -47,18 +47,26 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
             return INVALID_EXPRESSION;
           }
           LOG_INFO("\n>> op_s %d", tmp->val.op.s);
-          if (tmp->val.op.s != _l_bracket) {
+          if (tmp->type != BRACKET) {
             enqueue(queue, tmp);
           } else {
-            break; // got _l_braket removed from stack
+            if (tmp->val.bracket == L_BRACKET) {
+              free(tmp);
+              break; // got _l_braket removed from stack
+            } else {
+              LOG_ERROR("\n>> Should have found l_bracket, %s:%d", __FILE__,
+                        __LINE__);
+              free(tmp);
+              return INVALID_EXPRESSION;
+            }
           }
         }
       }
-    } else if (tok->type == OPERATOR || tok->type == UNARY_OP) {
+    } else if (tok->type == OPERATOR) {
       token_t * tmp;
       while (stack != NULL && stack->type != BRACKET) {
-        if ((tok->val.op.p <= stack->val.op.p && tok->val.op.a == l_to_r)
-        || (tok->val.op.p < stack->val.op.p && tok->val.op.a == r_to_l)) {
+        if ((tok->val.op.p <= stack->val.op.p && tok->val.op.a == L_TO_R)
+        || (tok->val.op.p < stack->val.op.p && tok->val.op.a == R_TO_L)) {
           if ((tmp = stack_pop(&stack)) == NULL) {
             LOG_ERROR("\n>> Err: Something went wrong, %s:%d", __FILE__, __LINE__);
             free(tok);
@@ -81,20 +89,6 @@ err_t create_rpn(expression_t *ex, token_queue_t *queue) {
 }
 
 void log_rpn(token_queue_t *queue) {
-  if (queue->head == NULL) {
-    LOG_INFO("\n>> got null token queue");
-    return;
-  }
-  token_t *tok = queue->head;
   LOG_INFO("\n>> RPN: ");
-  while (tok != NULL) {
-    if (tok->type == OPERAND) {
-      LOG_INFO("%lf ", tok->val.num);
-    } else if (tok->type == OPERATOR) {
-      LOG_INFO("%d ", tok->val.op.s);
-    } else if (tok->type == UNARY_OP) {
-      LOG_INFO("%d ", tok->val.op.s);
-    }
-    tok = tok->next;
-  }
+  log_queue(queue); 
 }

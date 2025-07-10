@@ -3,56 +3,83 @@
 
 #include "../include/error.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum sign {
-  _add,
-  _sub,
-  _mult,
-  _div,
-  _r_shift,
-  _l_shift,
-  _or,
-  _and,
-  _neg,
-  _pos,
-  _l_bracket,
-  _r_bracket,
-  _invalid_sign,
+  ADD,
+  SUB,
+  MULT,
+  DIV,
+  R_SHIFT,
+  L_SHIFT,
+  OR,
+  AND,
+  NEG,
+  POS,
+  INVALID_SIGN,
 } sign_t;
 
 typedef enum precedence // should be ascending order of precedence
-{ bit_or,
-  bit_xor,
-  bit_and,
-  shift,
-  add_sub,
-  mult_div,
-  unary,
-  bracket,
+{ BIT_OR,
+  BIT_XOR,
+  BIT_AND,
+  SHIFT,
+  ADD_SUB,
+  MULT_DIV,
+  UNARY,
+  INVALID_P,
 } precedence_t;
 
 typedef enum associativity_t {
-  l_to_r,
-  r_to_l,
+  L_TO_R,
+  R_TO_L,
+  INVALID_A,
 } associativity;
+
+typedef enum operator_type {
+  UNARY_OP,
+  BINARY_OP,
+  INVALID_OP,
+} operator_type_t;
 
 typedef struct op {
   sign_t s;
   precedence_t p;
   associativity a;
+  operator_type_t type;
 } operator_t;
+
+typedef enum operand_type {
+  DECIMAL,
+  HEXADECIMAL,
+  BINARY,
+} operand_type_t;
+
+typedef union operand_val {
+  double dec;        
+  uint64_t hex_bin;  
+} operand_val_t;
+
+typedef struct operand {
+  operand_val_t val;
+  operand_type_t type;
+} operand_t;
 
 typedef enum token_type {
   BRACKET,
-  UNARY_OP,
   OPERATOR,
   OPERAND,
 } token_type_t;
 
+typedef enum bracket {
+  L_BRACKET,
+  R_BRACKET,
+} bracket_t;
+
 typedef union token_val {
-  double num;
-  long int hex_bin;
+  bracket_t bracket;
   operator_t op;
+  operand_t operand;
 } token_val_t;
 
 typedef struct token {
@@ -86,7 +113,7 @@ void log_stack(token_stack_t *stack);
 
 err_t is_unary(expression_t *ex, int *index);
 
-err_t char_to_op(expression_t *ex, int *index, operator_t *op);
+err_t char_to_token(expression_t *ex, int *index, token_t *new_token);
 
 err_t tokanizer(expression_t *ex, int *index, token_t *new_token);
 
